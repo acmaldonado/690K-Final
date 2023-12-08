@@ -1,0 +1,1 @@
+from full_body_manipulation.envs.full_body_panda_env import FullBodyPanda
