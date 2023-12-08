@@ -18,6 +18,7 @@ mode = p.TORQUE_CONTROL
 joints = [i for i in range(p.getNumJoints(boxId))]
 command = np.zeros(p.getNumJoints(boxId))
 command[0] = maxForce
+print(len(command))
 #set the center of mass frame (loadURDF sets base link frame) startPos/Ornp.resetBasePositionAndOrientation(boxId, startPos, startOrientation)
 for i in range (10000):
     if i%100 == 0:
