@@ -1,4 +1,5 @@
 import pybullet as p
+import numpy as np
 import os
 
 
@@ -11,11 +12,11 @@ class TargetBall:
                         physicsClientId=client)
         
     def get_obs(self):
-        pos = p.getBasePositionAndOrientation(self.ball, physicsClientId=self.client)[0]
-        vel = p.getBaseVelocity(self.ball, physicsClientId=self.client)[0]
+        pos = np.array(p.getBasePositionAndOrientation(self.ball, physicsClientId=self.client)[0])
+        vel = np.array(p.getBaseVelocity(self.ball, physicsClientId=self.client)[0])
 
-        return [pos, vel]
+        return {"obj_pos":pos, "obj_vel":vel}
 
 
-    def getIds(self):
+    def get_ids(self):
         return self.client, self.ball

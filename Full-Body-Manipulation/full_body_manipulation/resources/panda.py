@@ -33,6 +33,6 @@ class Panda:
             joint_pos[i] = joint_states[i][0]
             joint_vel[i] = joint_states[i][1]
 
-        return [joint_pos, joint_vel]
+        return {"joint_pos":joint_pos, "joint_vel":joint_vel}
 
         

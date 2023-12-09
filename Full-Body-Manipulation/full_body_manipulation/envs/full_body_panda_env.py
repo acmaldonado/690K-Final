@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import numpy as np
 import pybullet as p
 import os
@@ -23,7 +23,12 @@ class FullBodyPanda(gym.Env):
     Y_BOUND = [-1.5, 1.5]
     Z_BOUND = [0, 2]
 
+    SPAWN_X_BOUND = [-1, 1]
+    SPAWN_Y_BOUND = [-1, 1]
+    SPAWN_Z_BOUND = [0, 0.5]
+
     MAX_STEPS = 1000
+    DELTA = 0.25
 
     PANDA_START_POS = [0,0,0]
     PANDA_START_ORIENTATION = p.getQuaternionFromEuler([0,0,0])
@@ -76,22 +81,52 @@ class FullBodyPanda(gym.Env):
         self.panda = None
         self.object = None
         self.goal = None
-        self.done = False
+        self.has_touched = False
         self.steps = 0
+        self.done = False
 
-        self.reset()
+        self.reset(None)
 
     def get_combined_obs(self):
         panda_obs = self.panda.get_partial_observation()
         obj_obs = self.object.get_obs()
 
-        obs = np.concatenate((panda_obs,obj_obs,self.goal),axis=None)
+        panda_obs.update(obj_obs)
+        panda_obs["goal_pos"] = self.goal
 
-        return obs
+        return panda_obs
+    
+    def ball_out_of_bounds(self):
+        obj_pos = self.object.get_obs()['obj_pos']
+        if obj_pos[0] < self.X_BOUND[0] or obj_pos[0] > self.X_BOUND[1]:
+            return 0
+        if obj_pos[1] < self.Y_BOUND[0] or obj_pos[1] > self.Y_BOUND[1]:
+            return 1
+        if obj_pos[2] < self.Z_BOUND[0] or obj_pos[2] > self.Z_BOUND[1]:
+            return 2
+        return -1
+
     
     def reward_function(self):
-        dist = -np.linalg.norm(np.array(self.object.get_obs()[0]) - np.array(self.goal))
-        return dist, False
+        done = False
+        dist = np.linalg.norm(np.array(self.object.get_obs()['obj_pos']) - np.array(self.goal))
+        reward = -dist
+        if not self.has_touched:
+            contact_points = p.getContactPoints(self.panda.get_ids()[1], self.object.get_ids()[1])
+            if len(contact_points) > 0:
+                reward += 20
+                print(f'Touched! Reward: {reward}')
+                self.has_touched = True
+        if dist <= self.DELTA:
+            done = True
+            reward += 100
+            print('Ball was close to goal!')
+        bound_check = self.ball_out_of_bounds()
+        if bound_check >= 0:
+            done = True
+            reward -= 100
+            print(f'Ball was out of bound {bound_check}')
+        return reward, done
 
     def step(self, action):
         self.steps += 1
@@ -101,12 +136,14 @@ class FullBodyPanda(gym.Env):
 
         reward, self.done = self.reward_function()
 
-        tlimit_reached = self.steps >= self.MAX_STEPS
+        trunc = self.steps >= self.MAX_STEPS
 
-        return curr_obs, reward, self.done, tlimit_reached, dict()
+        return curr_obs, reward, self.done, trunc, dict()
 
 
-    def reset(self):
+    def reset(self, seed=None, options=None):
+        if seed is not None:
+            self.seed(seed)
         p.resetSimulation(self.client)
         p.setGravity(0,0,-10)
         plane.Plane(self.client)
@@ -115,9 +152,9 @@ class FullBodyPanda(gym.Env):
         #Randomly generates a starting object position and goal position
 
         obj_start_pos = [
-            self.np_random.uniform(self.X_BOUND[0], self.X_BOUND[1]),
-            self.np_random.uniform(self.Y_BOUND[0], self.Y_BOUND[1]),
-            self.np_random.uniform(self.Z_BOUND[0], self.Z_BOUND[1])
+            self.np_random.uniform(self.SPAWN_X_BOUND[0], self.SPAWN_X_BOUND[1]),
+            self.np_random.uniform(self.SPAWN_Y_BOUND[0], self.SPAWN_Y_BOUND[1]),
+            0.21
         ]
 
         self.goal = [
@@ -126,6 +163,8 @@ class FullBodyPanda(gym.Env):
             0.1
         ]
         self.done = False
+        self.steps = 0
+        self.has_touched = False
 
         print(f'Reset object position: {obj_start_pos}\nReset goal position: {self.goal}')
 
@@ -139,7 +178,7 @@ class FullBodyPanda(gym.Env):
 
         self.steps = 0
 
-        return self.get_combined_obs()
+        return self.get_combined_obs(), dict()
 
 
     def render(self):
@@ -155,10 +194,12 @@ class FullBodyPanda(gym.Env):
 if __name__ == "__main__":
     #Load test of environment
     env = FullBodyPanda()
-    for episodes in range(20):
+    for episodes in range(5):
         for i in range(env.MAX_STEPS):
-            p.stepSimulation()
-            print(f'Reward: {env.reward_function()}')
+            obs, reward, done, trunc, info = env.step(np.array([0,0,0,0,0,0,0]))
+            if done:
+                break
+            print(f'Reward: {reward}')
             time.sleep(1./240.)
         print(f'First Observation: {env.reset()}')
         print(f'First reward: {env.reward_function()}')
