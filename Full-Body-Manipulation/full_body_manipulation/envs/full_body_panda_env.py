@@ -4,7 +4,6 @@ import pybullet as p
 class FullBodyPanda(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    MAX_TORQUE = 500
     X_BOUND = [-10, 10]
     Y_BOUND = [-10, 10]
     Z_BOUND = [0, 10]
@@ -13,10 +12,10 @@ class FullBodyPanda(gym.Env):
 
   
     def __init__(self):
-        #Outputs torques between -1 and 1 for each joint to be multiplied by max torque
+        #Outputs torques between -1 and 1 for each non-fixed joint to be multiplied by max torque
         self.action_space = gym.spaces.Box(
-            low=np.array([-1 for i in range(8)]),
-            high=np.array([1 for i in range(8)]))
+            low=np.array([-1 for i in range(7)]),
+            high=np.array([1 for i in range(7)]))
         #Observation space
         #   joint_pos: [Continuous 7x1] position of each joint; limits set according to panda URDF
         #   joint_vel: [Continuous 7x1] angular velocity of each joint; limits set according to panda URDF

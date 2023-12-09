@@ -23,7 +23,7 @@ print(len(command))
 for i in range (10000):
     if i%100 == 0:
         command[0] = -command[0]
-        print(p.getJointState(boxId, 0))
+        print(p.getJointStates(boxId, joints)[0][0])
         print('switch!')
     if i == 500:
         command[4] = maxForce
