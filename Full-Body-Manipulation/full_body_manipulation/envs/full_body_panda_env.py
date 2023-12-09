@@ -1,14 +1,33 @@
 import gym
 import numpy as np
 import pybullet as p
+import os
+import time
+
+from pathlib import Path
+from importlib.machinery import SourceFileLoader
+
+# from full_body_manipulation.resources.panda import Panda
+# from full_body_manipulation.resources.plane import Plane
+# from full_body_manipulation.resources.target_ball import TargetBall
+
+panda = SourceFileLoader("panda", "/home/andy/Desktop/pybullet-test/Full-Body-Manipulation/full_body_manipulation/resources/panda.py").load_module()
+plane = SourceFileLoader("plane", "/home/andy/Desktop/pybullet-test/Full-Body-Manipulation/full_body_manipulation/resources/plane.py").load_module()
+target_ball = SourceFileLoader("target_ball", "/home/andy/Desktop/pybullet-test/Full-Body-Manipulation/full_body_manipulation/resources/target_ball.py").load_module()
+
+
 class FullBodyPanda(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    X_BOUND = [-10, 10]
-    Y_BOUND = [-10, 10]
-    Z_BOUND = [0, 10]
+    X_BOUND = [-1.5, 1.5]
+    Y_BOUND = [-1.5, 1.5]
+    Z_BOUND = [0, 2]
 
-    CONNECT_MODE = p.DIRECT
+    PANDA_START_POS = [0,0,0]
+    PANDA_START_ORIENTATION = p.getQuaternionFromEuler([0,0,0])
+
+    CONNECT_MODE = p.GUI
+    #CONNECT_MODE = p.DIRECT
 
   
     def __init__(self):
@@ -52,11 +71,47 @@ class FullBodyPanda(gym.Env):
 
         self.client = p.connect(self.CONNECT_MODE)
 
+        self.panda = None
+        self.object = None
+        self.goal = None
+        self.done = False
+
+        self.reset()
+
     def step(self, action):
         pass
 
     def reset(self):
-        pass
+        p.resetSimulation(self.client)
+        p.setGravity(0,0,-10)
+        plane.Plane(self.client)
+        self.panda = panda.Panda(self.client, self.PANDA_START_POS, self.PANDA_START_ORIENTATION)
+
+        #Randomly generates a starting object position and goal position
+
+        obj_start_pos = [
+            self.np_random.uniform(self.X_BOUND[0], self.X_BOUND[1]),
+            self.np_random.uniform(self.Y_BOUND[0], self.Y_BOUND[1]),
+            self.np_random.uniform(self.Z_BOUND[0], self.Z_BOUND[1])
+        ]
+
+        self.goal = [
+            self.np_random.uniform(self.X_BOUND[0], self.X_BOUND[1]),
+            self.np_random.uniform(self.Y_BOUND[0], self.Y_BOUND[1]),
+            0.1
+        ]
+        self.done = False
+
+        print(f'Reset object position: {obj_start_pos}\nReset goal position: {self.goal}')
+
+        #Instantiate target object and visual representation of goal
+
+        self.object = target_ball.TargetBall(self.client, obj_start_pos)
+
+        f_name = str(Path(os.path.dirname(__file__)).parent.joinpath('resources/goal_visual.urdf'))
+        print(f'Loading goal from {f_name} ...')
+        p.loadURDF(f_name, self.goal, physicsClientId=self.client, useFixedBase=1)
+
 
     def render(self):
         pass
@@ -67,3 +122,14 @@ class FullBodyPanda(gym.Env):
     def seed(self, seed=None): 
         self.np_random, seed = gym.utils.seeding.np_random(seed)
         return [seed]
+
+if __name__ == "__main__":
+    #Load test of environment
+    env = FullBodyPanda()
+    for episodes in range(20):
+        for i in range(1000):
+            p.stepSimulation()
+            time.sleep(1./240.)
+        env.reset()
+    env.close()
+    

@@ -9,9 +9,9 @@ class Panda:
 
     def __init__(self, client, startPos, startOrientation):
         self.client = client
-        f_name = Path(os.path.dirname(__file__)).parent.parent.parent.joinpath('franka_panda_description-master/robots/panda_arm.urdf')
+        f_name = str(Path(os.path.dirname(__file__)).parent.parent.parent.joinpath('franka_panda_description-master/robots/panda_arm.urdf'))
         print(f'Trying to load Panda from {f_name} ...')
-        self.panda = p.loadURDF(f_name, startPos, startOrientation, physicsClientId=client, useFixedBase=1)
+        self.panda = p.loadURDF(f_name, startPos, startOrientation, physicsClientId=client, useFixedBase=1, globalScaling=2)
 
         self.joints = [i for i in range(7)]
     
