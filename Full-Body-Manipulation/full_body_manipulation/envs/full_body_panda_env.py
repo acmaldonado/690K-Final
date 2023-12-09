@@ -23,6 +23,8 @@ class FullBodyPanda(gym.Env):
     Y_BOUND = [-1.5, 1.5]
     Z_BOUND = [0, 2]
 
+    MAX_STEPS = 1000
+
     PANDA_START_POS = [0,0,0]
     PANDA_START_ORIENTATION = p.getQuaternionFromEuler([0,0,0])
 
@@ -75,11 +77,34 @@ class FullBodyPanda(gym.Env):
         self.object = None
         self.goal = None
         self.done = False
+        self.steps = 0
 
         self.reset()
 
+    def get_combined_obs(self):
+        panda_obs = self.panda.get_partial_observation()
+        obj_obs = self.object.get_obs()
+
+        obs = np.concatenate((panda_obs,obj_obs,self.goal),axis=None)
+
+        return obs
+    
+    def reward_function(self):
+        dist = -np.linalg.norm(np.array(self.object.get_obs()[0]) - np.array(self.goal))
+        return dist, False
+
     def step(self, action):
-        pass
+        self.steps += 1
+        self.panda.apply_action(action)
+        p.stepSimulation()
+        curr_obs = self.get_combined_obs()
+
+        reward, self.done = self.reward_function()
+
+        tlimit_reached = self.steps >= self.MAX_STEPS
+
+        return curr_obs, reward, self.done, tlimit_reached, dict()
+
 
     def reset(self):
         p.resetSimulation(self.client)
@@ -112,6 +137,10 @@ class FullBodyPanda(gym.Env):
         print(f'Loading goal from {f_name} ...')
         p.loadURDF(f_name, self.goal, physicsClientId=self.client, useFixedBase=1)
 
+        self.steps = 0
+
+        return self.get_combined_obs()
+
 
     def render(self):
         pass
@@ -127,9 +156,11 @@ if __name__ == "__main__":
     #Load test of environment
     env = FullBodyPanda()
     for episodes in range(20):
-        for i in range(1000):
+        for i in range(env.MAX_STEPS):
             p.stepSimulation()
+            print(f'Reward: {env.reward_function()}')
             time.sleep(1./240.)
-        env.reset()
+        print(f'First Observation: {env.reset()}')
+        print(f'First reward: {env.reward_function()}')
     env.close()
     
