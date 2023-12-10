@@ -12,7 +12,7 @@ def main():
     # vec_env = DummyVecEnv([lambda: gym.make('FullBodyPanda-v0', max_episode_steps = 1000)])
     # vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True)
     vec_env = gym.make('FullBodyPanda-v0', max_episode_steps = 1000)
-    model = stable_baselines3.A2C("MultiInputPolicy", vec_env, verbose=1)
+    model = stable_baselines3.A2C("MultiInputPolicy", vec_env, verbose=1, tensorboard_log="/home/andy/Desktop/pybullet-test/tensor_logs")
     model.learn(total_timesteps=100000)
 
     vec_env = model.get_env()

@@ -27,7 +27,8 @@ class FullBodyPanda(gym.Env):
     SPAWN_Y_BOUND = [-1, 1]
     SPAWN_Z_BOUND = [0, 0.5]
 
-    MAX_STEPS = 1000
+    MAX_STEPS = 10000
+    DELTA_T = 1.0/240.0
     DELTA = 0.25
 
     PANDA_START_POS = [0,0,0]
@@ -85,6 +86,33 @@ class FullBodyPanda(gym.Env):
         self.steps = 0
         self.done = False
 
+        #Reward Parameters
+
+        # Positive rewards
+        self.task_exp_scale = -3.0
+        self.task_scale = 0.3
+        self.task_offset = -0.31
+
+        self.qdot_exp_scale = -0.01
+        self.qdot_scale = 0.05
+        self.qdot_offset = -0.05
+
+        self.qddot_exp_scale = -20.0
+        self.qddot_scale = 0.05
+        self.qddot_offset = -0.05
+
+        self.torque_exp_scale = -0.01
+        self.torque_scale = 0.15
+        self.torque_offset = -0.15
+
+        self.dtorque_exp_scale = -0.01
+        self.dtorque_scale = 0.2
+        self.dtorque_offset = -0.2
+
+        #Previous values for reward calculation
+        self.last_qdot = np.zeros(7)
+        self.last_command = np.zeros(7)
+
         self.reset(None)
 
     def get_combined_obs(self):
@@ -107,26 +135,54 @@ class FullBodyPanda(gym.Env):
         return -1
 
     
-    def reward_function(self):
+    def reward_function(self, action=None):
         done = False
-        dist = np.linalg.norm(np.array(self.object.get_obs()['obj_pos']) - np.array(self.goal))
-        reward = -dist
-        if not self.has_touched:
-            contact_points = p.getContactPoints(self.panda.get_ids()[1], self.object.get_ids()[1])
-            if len(contact_points) > 0:
-                reward += 20
-                print(f'Touched! Reward: {reward}')
-                self.has_touched = True
-        if dist <= self.DELTA:
+        total_reward = 0
+        if action is None:
+            action = np.zeros(7)
+        #Calculate task reward
+        goal_dist = np.linalg.norm(np.array(self.object.get_obs()['obj_pos']) - np.array(self.goal))
+        r_task = self.task_scale*np.exp(self.task_exp_scale*np.square(goal_dist)) + self.task_offset
+        #Check if goal has been reached. Add large positive reward for successful completion
+        if goal_dist <= self.DELTA:
             done = True
-            reward += 100
+            total_reward += 1000
             print('Ball was close to goal!')
+
+        #Calculate qdot regularization reward
+        curr_qdot = self.panda.get_partial_observation()['joint_vel']
+        r_qdot = self.qddot_scale*np.exp(self.qddot_exp_scale* np.square(np.linalg.norm(curr_qdot))) + self.qdot_offset
+
+        #Calculate qddot regularization reward by estimating qddot
+        qddot_est = (curr_qdot - self.last_qdot)/self.DELTA_T
+        r_qddot = self.qddot_scale*np.exp(self.qddot_exp_scale*np.square(np.linalg.norm(qddot_est))) + self.qddot_offset
+        self.last_qdot = curr_qdot
+
+        #Calculate torque regularization reward
+        r_torque = self.torque_scale*np.exp(self.torque_exp_scale*np.linalg.norm(action)) + self.torque_offset
+
+        #Calculate dtorque regularization reward
+        r_dtorque = self.dtorque_scale*np.exp(self.dtorque_exp_scale*np.linalg.norm(action - self.last_command)) + self.dtorque_offset
+        self.last_command = action
+
+        # if not self.has_touched:
+        #     contact_points = p.getContactPoints(self.panda.get_ids()[1], self.object.get_ids()[1])
+        #     if len(contact_points) > 0:
+        #         reward += 20
+        #         print(f'Touched! Reward: {reward}')
+        #         self.has_touched = True
+        
+        #Check boundary conditions for object. Add large penalty for out of bounds
         bound_check = self.ball_out_of_bounds()
         if bound_check >= 0:
             done = True
-            reward -= 100
+            total_reward -= 1000
             print(f'Ball was out of bound {bound_check}')
-        return reward, done
+
+        #Sum all of the rewards
+        total_reward += r_task + r_qdot + r_qddot + r_torque + r_dtorque
+
+        return total_reward, done
 
     def step(self, action):
         self.steps += 1
@@ -134,7 +190,7 @@ class FullBodyPanda(gym.Env):
         p.stepSimulation()
         curr_obs = self.get_combined_obs()
 
-        reward, self.done = self.reward_function()
+        reward, self.done = self.reward_function(action)
 
         trunc = self.steps >= self.MAX_STEPS
 
@@ -146,6 +202,7 @@ class FullBodyPanda(gym.Env):
             self.seed(seed)
         p.resetSimulation(self.client)
         p.setGravity(0,0,-10)
+        p.setTimeStep(self.DELTA_T, physicsClientId=self.client)
         plane.Plane(self.client)
         self.panda = panda.Panda(self.client, self.PANDA_START_POS, self.PANDA_START_ORIENTATION)
 
